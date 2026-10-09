@@ -8,6 +8,9 @@ import com.duck.warehouse.shared.Size;
 import com.duck.warehouse.warehouse.IdGenerator;
 import com.duck.warehouse.warehouse.domain.Duck;
 import java.util.Optional;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -25,6 +28,8 @@ public class DuckWriteRepository {
 
 	private final MongoTemplate template;
 	private final IdGenerator ids;
+	private static final Logger log = LoggerFactory.getLogger(DuckWriteRepository.class);
+
 
 	DuckWriteRepository(MongoTemplate template, IdGenerator ids) {
 		this.template = template;
@@ -48,11 +53,15 @@ public class DuckWriteRepository {
 			try {
 				Duck previous = template.findAndModify(query, update,
 						FindAndModifyOptions.options().upsert(true).returnNew(false), Duck.class);
-				return previous == null
-						? new AddResult(new Duck(candidateId, color, size, price, quantity, false), true)
-						: new AddResult(
-								new Duck(previous.id(), color, size, price, previous.quantity() + quantity, false),
-								false);
+				if (previous == null) {
+					log.debug("Inserted new duck id={}", candidateId);
+					return new AddResult(new Duck(candidateId, color, size, price, quantity, false), true);
+				} else {
+					log.debug("Merged into existing duck id={} (+{})", previous.id(), quantity);
+					return new AddResult(
+							new Duck(previous.id(), color, size, price, previous.quantity() + quantity, false),
+							false);
+				}
 			} catch (DuplicateKeyException race) {
 				if (attempt >= MAX_ATTEMPTS)
 					throw race;

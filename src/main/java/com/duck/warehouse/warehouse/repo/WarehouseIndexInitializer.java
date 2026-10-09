@@ -1,5 +1,7 @@
 package com.duck.warehouse.warehouse.repo;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -19,16 +21,23 @@ import org.springframework.data.mongodb.core.query.Criteria;
 @Component
 class WarehouseIndexInitializer implements ApplicationRunner {
 	private final MongoTemplate template;
+	private static final Logger log = LoggerFactory.getLogger(WarehouseIndexInitializer.class);
 
 	WarehouseIndexInitializer(MongoTemplate template) {
 		this.template = template;
 	}
-
+	
 	@Override
 	public void run(ApplicationArguments args) {
-		template.indexOps(Duck.class)
-				.createIndex(new Index().named("uq_active_duck").on("color", Sort.Direction.ASC)
-						.on("size", Sort.Direction.ASC).on("price", Sort.Direction.ASC).unique()
-						.partial(PartialIndexFilter.of(Criteria.where("deleted").is(false))));
+	    try {
+	    	template.indexOps(Duck.class)
+			.createIndex(new Index().named("uq_active_duck").on("color", Sort.Direction.ASC)
+					.on("size", Sort.Direction.ASC).on("price", Sort.Direction.ASC).unique()
+					.partial(PartialIndexFilter.of(Criteria.where("deleted").is(false))));
+	        log.info("Unique index 'uq_active_duck' ensured on ducks(color, size, price) where deleted=false");
+	    } catch (RuntimeException e) {
+	        log.error("Could not create the unique index; the merge invariant is NOT protected", e);
+	        throw e;   // fail startup rather than run without the invariant
+	    }
 	}
 }

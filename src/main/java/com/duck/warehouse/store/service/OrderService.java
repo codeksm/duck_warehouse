@@ -5,6 +5,8 @@ import java.math.RoundingMode;
 import java.util.List;
 import java.util.stream.IntStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.duck.warehouse.shared.Color;
@@ -37,6 +39,7 @@ import com.duck.warehouse.warehouse.spi.WarehouseLookup;
  */
 @Service
 public class OrderService {
+	private static final Logger log = LoggerFactory.getLogger(OrderService.class);
 
 	/** An order item after price resolution and packaging. */
 	private record ResolvedItem(Color color, Size size, int quantity, BigDecimal unitPrice, Packaging packaging) {
@@ -64,7 +67,9 @@ public class OrderService {
 
 		List<OrderLineResponse> lines = IntStream.range(0, items.size())
 				.mapToObj(n -> toLine(items.get(n), price.lines().get(n))).toList();
-
+		
+		log.info("Order quoted: items={} units={} destination={} mode={} total={}",
+		        items.size(), pricingRequest.totalUnits(), destination, mode.label(), price.total());
 		return new OrderResponse(request.country().trim(), mode.label(), "USD", pricingRequest.totalUnits(), lines,
 				price.goodsCost(), toAdjustments(price.orderAdjustments()), price.total());
 	}

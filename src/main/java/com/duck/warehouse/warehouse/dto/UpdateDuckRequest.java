@@ -10,5 +10,5 @@ import jakarta.validation.constraints.PositiveOrZero;
  * optional, at least one required.
  */
 public record UpdateDuckRequest(@Positive @Digits(integer = 9, fraction = 2) Double price,
-		@PositiveOrZero @Max(100_000_000) Integer quantity) {
+		@PositiveOrZero @Max(1_000_000) Integer quantity) {
 }

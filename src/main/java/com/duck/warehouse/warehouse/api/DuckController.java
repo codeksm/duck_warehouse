@@ -41,9 +41,11 @@ public class DuckController {
 
 	@GetMapping
 	PageResponse<DuckResponse> list(@RequestParam(defaultValue = "0") int page,
-			@RequestParam(defaultValue = "20") int size, @RequestParam(defaultValue = "quantity") String sortBy,
-			@RequestParam(defaultValue = "asc") String direction) {
-		return PageResponse.from(service.list(page, size, sortBy, direction), DuckResponse::from);
+			@RequestParam(defaultValue = "20") int size,
+			@RequestParam(defaultValue = "quantity") String sortBy,
+			@RequestParam(defaultValue = "asc") String direction,
+			@RequestParam(defaultValue = "false") boolean showDeleted) {
+		return PageResponse.from(service.list(page, size, sortBy, direction, showDeleted), DuckResponse::from);
 	}
 
 	@PatchMapping("/{id}")

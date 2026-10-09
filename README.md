@@ -3,7 +3,7 @@
 A small warehouse application and an order-pricing API for an online shop that sells rubber ducks.
 
 - **Stack:** Java 17, Spring Boot 4.1.1, MongoDB, Maven
-- **Scope:** backend only. The store has no UI by design.
+- **Scope:** backend only. The warehouse UI is deferred; the store has no UI by design.
 - **Modules:** `warehouse` (CRUD with a concurrency-safe merge rule) and `store` (order quote: packaging + pricing)
 
 ---
@@ -84,6 +84,9 @@ curl -i -X POST http://localhost:8080/api/ducks -H 'Content-Type: application/js
 # List (paginated, sorted by quantity)
 curl "http://localhost:8080/api/ducks?page=0&size=20&sortBy=quantity&direction=asc"
 
+# List including logically deleted ducks (optional, default false)
+curl "http://localhost:8080/api/ducks?showDeleted=true"
+
 # Edit price and/or quantity (replace 1 with a real id)
 curl -X PATCH http://localhost:8080/api/ducks/1 -H 'Content-Type: application/json' \
   -d '{"price":6.50,"quantity":40}'
@@ -102,6 +105,8 @@ curl -X POST http://localhost:8080/api/store/orders -H 'Content-Type: applicatio
 curl -i -X POST http://localhost:8080/api/ducks -H "Content-Type: application/json" -d "{\"color\":\"Red\",\"size\":\"Large\",\"price\":5.00,\"quantity\":10}"
 
 curl "http://localhost:8080/api/ducks?page=0&size=20&sortBy=quantity&direction=asc"
+
+curl "http://localhost:8080/api/ducks?showDeleted=true"
 
 curl -X PATCH http://localhost:8080/api/ducks/1 -H "Content-Type: application/json" -d "{\"price\":6.50,\"quantity\":40}"
 
@@ -131,13 +136,13 @@ In **PowerShell** type `curl.exe` instead of `curl` (plain `curl` is an alias fo
 | Operation | Request | Result |
 |---|---|---|
 | Add | `POST /api/ducks` `{"color","size","price","quantity"}` | `201` new record, or `200` merged into the existing one |
-| List | `GET /api/ducks?page=0&size=20&sortBy=quantity&direction=asc` | Paginated; deleted ducks never appear |
+| List | `GET /api/ducks?page=0&size=20&sortBy=quantity&direction=asc[&showDeleted=true]` | Paginated; deleted ducks are hidden unless `showDeleted=true` |
 | Edit | `PATCH /api/ducks/{id}` `{"price"?, "quantity"?}` | Only price and quantity; color and size are not accepted. At least one field required |
 | Delete | `DELETE /api/ducks/{id}` | `204`; logical delete (`deleted=true`), record stays in the database |
 
 - `color`: Red, Green, Yellow, Black. `size`: XLarge, Large, Medium, Small, XSmall. Both case-insensitive.
-- List params: `page` (>= 0), `size` (1..100, default 20), `sortBy` one of `id, color, size, price, quantity` (default `quantity`), `direction` `asc|desc` (default `asc`). `id` is a tie-breaker so paging is stable.
-- List response: `{ "content": [...], "page", "size", "totalElements", "totalPages" }`.
+- List params: `page` (>= 0), `size` (1..100, default 20), `sortBy` one of `id, color, size, price, quantity` (default `quantity`), `direction` `asc|desc` (default `asc`), `showDeleted` `true|false` (optional, default `false`: logically deleted ducks are included only when `true`). `id` is a tie-breaker so paging is stable.
+- List response: `{ "content": [...], "page", "size", "totalElements", "totalPages" }`. Each duck has `id, color, size, price, quantity, deleted`; `deleted` is `true` only for records returned because of `showDeleted=true`.
 
 ### Store: order quote
 `POST /api/store/orders`
@@ -160,7 +165,7 @@ Response (shape):
 ### Errors (RFC 7807 problem JSON)
 | Status | When |
 |---|---|
-| 400 | Validation failed, unknown color/size/shipping mode, malformed JSON, bad paging params |
+| 400 | Validation failed, unknown color/size/shipping mode, malformed JSON, bad paging params, non-boolean `showDeleted` |
 | 404 | Duck id not found (or already deleted); no duck of that color/size for an order |
 | 409 | Not enough stock for an order line; edit would collide with another live duck |
 
@@ -214,4 +219,5 @@ Each handler does its own stage and passes a per-request `PricingState` on. To a
 11. **Prices** are `Double` per the spec entity, limited to 2 decimals, and converted to `BigDecimal` for all calculations.
 12. **Ids** are Integers from an atomic counter collection. They are unique and increasing but **not guaranteed gap-free** (for example after a lost insert race). Integer range is ample for the number of distinct duck records; moving to `Long` would be the change if that ever stopped being true.
 13. **Default list sort** is quantity ascending (lowest stock first). `sortBy` is whitelisted.
-14. **Quantity limits** are input sanity checks: a single add is capped at 1,000,000, an edit at 100,000,000, and an order line at 10,000,000. **Known limitation:** stock that grows through many repeated adds is not guarded against exceeding the Integer maximum (2,147,483,647). The fix would be a conditional atomic update that rejects an overflowing add with 409.
+14. **Quantity limits** are input sanity checks: a single add is capped at 1,000,000, an edit at 1,000,000, and an order line at 10,000,000. **Known limitation:** stock that grows through many repeated adds is not guarded against exceeding the Integer maximum (2,147,483,647). The fix would be a conditional atomic update that rejects an overflowing add with 409.
+15. **Deleted ducks are hidden by default.** The spec says deleted ducks never appear in the listing, so `showDeleted` defaults to `false` and the default listing is unchanged. `showDeleted=true` is an opt-in view (for support or audit) that includes logically deleted records, each flagged `deleted: true`. Deleted records are never returned by the order/price lookup, regardless of this flag.
